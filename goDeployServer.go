@@ -4,8 +4,10 @@ import ("./PostInfo"
 	"encoding/json"
 	"os/exec"
 	"os"
+	"time"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 const botsPath = "/TelegramBots"
@@ -20,37 +22,57 @@ func getNewCommit(r *http.Request) string {
 	return postInfo.Before
 }
 
-func deploy(w http.ResponseWriter, r *http.Request, botName string){
-	newCommit := getNewCommit(r)
-	fmt.Fprintf(w, "Commit entrante: <%s>\n", newCommit)
-	os.Chdir(botsPath + "/" + botName)
-	localCommit, _ := exec.Command("getLastCommit").Output()
-	fmt.Fprintf(w, "Commit local: <%s>\n", localCommit)
-	if string(localCommit) != string(newCommit + "\n") {
-		fmt.Fprintf(w, "Redesplegando %s...\n", botName)
-		out, err := exec.Command("python", botName+".py", "stop").Output()
-		fmt.Fprintf(w, "%s\n", out)
-		if err != nil {
-			fmt.Fprintf(w, "ERROR STOPPING: %s\n", err)
-		}
-		out, err = exec.Command("git", "pull").Output()
-		fmt.Fprintf(w, "%s\n", out)
-		if err != nil {
-			fmt.Fprintf(w, "ERROR PULLING: %s\n", err)
-		}
-		out, err = exec.Command("python", botName+".py", "start").Output()
-		fmt.Fprintf(w, "%s\n", out)
-		if err != nil {
-			fmt.Fprintf(w, "ERROR STARTING: %s\n", err)
-		}
-	} else {
-		fmt.Fprintf(w, "No hay cambios que sincronizar. Ignorando...")
+
+func compareCommits(w http.ResponseWriter, r *http.Request) bool {
+	newCommit := strings.TrimSpace(getNewCommit(r))
+	fmt.Fprintf(w, "New commit: <%s>\n", newCommit)
+	out, err := exec.Command("getLastCommit").Output()
+	localCommit := strings.TrimSpace(string(out))
+	if err != nil {
+		fmt.Println("error:", err)
+	}
+	fmt.Fprintf(w, "Local commit: <%s>\n========================================================\n", localCommit)
+	return localCommit != newCommit
+}
+
+
+func handlePythonBot(w http.ResponseWriter, command string){
+	fmt.Fprintf(w, "========================================================\n-> %s BOT\n", strings.ToUpper(command))
+	_, err := exec.Command("/usr/bin/python", "bot.py", command).Output()
+	if err != nil {
+		fmt.Fprintf(w, "********************************************************\nError on %s bot: %s\n********************************************************\n", command, err)
 	}
 }
 
+
+func pullChanges(w http.ResponseWriter){
+	out, err := exec.Command("git", "pull").Output()
+	fmt.Fprintf(w, "========================================================\n-> PULL:\n%s", out)
+	if err != nil {
+		fmt.Fprintf(w, "********************************************************\nError on pull: %s\n********************************************************\n", err)
+	}
+}
+
+
+func deployPythonBot(w http.ResponseWriter, r *http.Request, botName string){
+	os.Chdir(botsPath)
+	os.Chdir(botsPath + "/" + botName)
+	fmt.Fprintf(w, "PUSH TO DEPLOY: %s\n========================================================\n", botName)
+	if compareCommits(w, r) {
+		fmt.Fprintf(w, "-> REDEPLOY\n")
+		handlePythonBot(w, "stop")
+		pullChanges(w)
+		time.Sleep(time.Second * 2)
+		handlePythonBot(w, "start")
+	} else {
+		fmt.Fprintf(w, "No changes to sync. Skipping...")
+	}
+}
+
+
 func deployAllUsersBot(w http.ResponseWriter, r *http.Request){
-	deploy(w, r, "AllUsersBot")
-	fmt.Fprintf(w, "Done.")
+	deployPythonBot(w, r, "AllUsersBot")
+	fmt.Fprintf(w, "========================================================\nDONE")
 }
 
 

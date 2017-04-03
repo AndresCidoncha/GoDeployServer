@@ -1,7 +1,6 @@
 package main
 
-import (//"log"
-	"./PostInfo"
+import ("./PostInfo"
 	"encoding/json"
 	"os/exec"
 	"os"
@@ -9,12 +8,11 @@ import (//"log"
 	"net/http"
 )
 
-const botPath = "/TelegramBots"
-const AllUsersBotPath = botPath + "/" + "AllUsersBot"
+const botsPath = "/TelegramBots"
 
 func getNewCommit(r *http.Request) string {
 	r.ParseForm()
-	var postInfo postInfo.GithubPostInfo
+	var postInfo postInfo.GitHubPostInfo
 	err := json.Unmarshal([]byte(r.FormValue("payload")), &postInfo)
 	if err != nil {
 		fmt.Println("error:", err)
@@ -22,24 +20,37 @@ func getNewCommit(r *http.Request) string {
 	return postInfo.Before
 }
 
-func deployAllUsersBot(w http.ResponseWriter, r *http.Request){
+func deploy(w http.ResponseWriter, r *http.Request, botName string){
 	newCommit := getNewCommit(r)
 	fmt.Fprintf(w, "Commit entrante: <%s>\n", newCommit)
-	os.Chdir(AllUsersBotPath)
+	os.Chdir(botsPath + "/" + botName)
 	localCommit, _ := exec.Command("getLastCommit").Output()
 	fmt.Fprintf(w, "Commit local: <%s>\n", localCommit)
 	if string(localCommit) != string(newCommit + "\n") {
-		fmt.Fprintf(w, "Deteniendo bot...\n")
-		out, _ := exec.Command("git", "pull").Output()
-		fmt.Fprintf(w, "Haciendo pull...\n")
-		out, _ = exec.Command("git", "pull").Output()
-		fmt.Fprintf(w, string(out))
-		out, _ = exec.Command("git", "pull").Output()
-		fmt.Fprintf(w, "Iniciando bot...\n")
+		fmt.Fprintf(w, "Redesplegando %s...\n", botName)
+		out, err := exec.Command("python", botName+".py", "stop").Output()
+		fmt.Fprintf(w, "%s\n", out)
+		if err != nil {
+			fmt.Fprintf(w, "ERROR STOPPING: %s\n", err)
+		}
+		out, err = exec.Command("git", "pull").Output()
+		fmt.Fprintf(w, "%s\n", out)
+		if err != nil {
+			fmt.Fprintf(w, "ERROR PULLING: %s\n", err)
+		}
+		out, err = exec.Command("python", botName+".py", "start").Output()
+		fmt.Fprintf(w, "%s\n", out)
+		if err != nil {
+			fmt.Fprintf(w, "ERROR STARTING: %s\n", err)
+		}
 	} else {
 		fmt.Fprintf(w, "No hay cambios que sincronizar. Ignorando...")
 	}
-	fmt.Fprintf(w, "No hay cambios que sincronizar. Ignorando...")
+}
+
+func deployAllUsersBot(w http.ResponseWriter, r *http.Request){
+	deploy(w, r, "AllUsersBot")
+	fmt.Fprintf(w, "Done.")
 }
 
 

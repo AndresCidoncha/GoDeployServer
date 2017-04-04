@@ -67,12 +67,12 @@ func deployPythonBot(w http.ResponseWriter, r *http.Request, botName string){
 	} else {
 		fmt.Fprintf(w, "No changes to sync. Skipping...")
 	}
+	fmt.Fprintf(w, "========================================================\nDONE")
 }
 
 
 func deployAllUsersBot(w http.ResponseWriter, r *http.Request){
 	deployPythonBot(w, r, "AllUsersBot")
-	fmt.Fprintf(w, "========================================================\nDONE")
 }
 
 

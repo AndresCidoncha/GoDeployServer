@@ -1,0 +1,15 @@
+[Unit]
+Description="GoDeployServer"
+Requires=                 
+After=  
+
+[Service]
+User=USUARIO
+PIDFile=/var/run/godeploy.pid
+ExecStartPre=/bin/rm -f /var/run/godeploy.pid
+WorkingDirectory=/TelegramBots
+ExecStart=/TelegramBots/GoDeployServer/GoDeployServer          
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target
